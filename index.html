@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en-PH">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartStock Inventory</title>
+  <meta name="theme-color" content="#f6f9fc" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-[100dvh] flex flex-col">
+
+  <!-- Top Navigation Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+          SS
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold text-slate-900" translate="no">SmartStock Inventory</h1>
+          </div>
+          <p class="text-xs text-slate-500">Demand planning, stock health and sales activity <span class="currency-marker" translate="no">PHP</span></p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="btnToggleFormulaGuide" type="button" aria-controls="formulaGuidePanel" aria-expanded="false" class="text-xs font-medium px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 transition">
+          How the Math Works
+        </button>
+        <button id="btnExportCsv" type="button" class="text-xs font-medium px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition">
+          Export CSV Report
+        </button>
+        <button id="btnResetDemo" type="button" class="text-xs font-medium px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition">
+          Reset Demo Data
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Collapsible Beginner Formula & Code Guide -->
+  <section id="formulaGuidePanel" class="hidden bg-indigo-950 text-indigo-100 border-b border-indigo-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-5">
+      <div class="flex items-start justify-between gap-4 mb-3">
+        <div>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider">How Your App Prevents Excess Inventory &amp; Stockouts</h2>
+          <p class="text-xs text-indigo-200 mt-0.5">Every time you add a product or log a sale, JavaScript automatically runs these three supply-chain formulas:</p>
+        </div>
+        <button id="btnCloseFormulaGuide" type="button" class="text-xs px-2.5 py-1 rounded bg-indigo-800 hover:bg-indigo-700 text-white">Close</button>
+      </div>
+      <div class="formula-list text-xs">
+        <div class="formula-row"><span>01</span><div><h3>Safety stock</h3><code>(Peak daily sales × Longest lead time) − (Average daily sales × Average lead time)</code><p>Buffers demand spikes and supplier delays.</p></div></div>
+        <div class="formula-row"><span>02</span><div><h3>Reorder point</h3><code>(Average daily sales × Average lead time) + Safety stock</code><p>Signals when to place the next order.</p></div></div>
+        <div class="formula-row"><span>03</span><div><h3>Stock ceiling</h3><code>Reorder point + 7-day predicted demand</code><p>Units above this level are marked as excess.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 flex-1 space-y-6" aria-busy="true">
+
+    <section class="overview-strip" aria-label="Inventory overview">
+      <div class="overview-metric"><div class="metric-label">Stock on hand <span id="kpiSkuCount">0 SKUs</span></div><strong id="kpiTotalUnits">0 units</strong><p>Inventory value <b id="kpiTotalValue">₱0.00</b></p></div>
+      <div class="overview-metric"><div class="metric-label">7-day demand <span>Forecast</span></div><strong id="kpiPredictedDemand">0 units</strong><p>Safety stock <b id="kpiSafetyStockTotal">0 units</b></p></div>
+      <div class="overview-metric"><div class="metric-label">Excess stock <span>Holding cost</span></div><strong id="kpiExcessUnits">0 units</strong><p>Annual estimate <b id="kpiExcessCost">₱0.00/yr</b></p></div>
+      <div class="overview-metric"><div class="metric-label">Sales revenue <span id="kpiUnitsSold">0 sold</span></div><strong id="kpiSalesRevenue">₱0.00</strong><p>Items to reorder <b id="kpiReorderCount">0 items</b></p></div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+      <div class="flex flex-wrap gap-2" role="tablist" aria-label="Inventory sections">
+        <button id="tabBtnInventory" type="button" role="tab" tabindex="0" aria-selected="true" aria-controls="viewInventory" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-indigo-600 text-white shadow-sm transition">
+          Inventory &amp; safety stock
+        </button>
+        <button id="tabBtnSales" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="viewSales" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition">
+          Sales activity
+        </button>
+        <button id="tabBtnReports" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="viewReports" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition">
+          Excess stock report
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <label for="holdingRateInput" class="text-xs text-slate-500 font-medium">Annual Tax &amp; Warehouse Rate:</label>
+        <select id="holdingRateInput" class="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700">
+          <option value="0.20">20% / yr (Low Cost)</option>
+          <option value="0.25" selected>25% / yr (Standard)</option>
+          <option value="0.35">35% / yr (High Tax/Cold Storage)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- TAB 1: INVENTORY & SAFETY STOCK CALCULATOR -->
+    <section id="viewInventory" role="tabpanel" tabindex="0" aria-labelledby="tabBtnInventory" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Left Column: Add / Edit Product & Live Safety Stock Preview -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4 h-fit">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 id="formTitle" class="text-base font-bold text-slate-900">Add or Update Product</h2>
+              <p class="text-xs text-slate-500">Enter sales &amp; lead time to auto-compute optimal stock</p>
+            </div>
+            <button id="btnClearForm" type="button" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Clear</button>
+          </div>
+
+          <form id="productForm" class="space-y-3">
+            <input type="hidden" id="editProductId" value="" />
+
+            <div class="grid grid-cols-2 gap-3">
+              <div class="col-span-2 sm:col-span-1">
+                <label for="prodName" class="block text-xs font-medium text-slate-700 mb-1">Product Name *</label>
+                <input id="prodName" type="text" required placeholder="e.g., Wireless Barcode Scanner" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div class="col-span-2 sm:col-span-1">
+                <label for="prodSku" class="block text-xs font-medium text-slate-700 mb-1">SKU / Code *</label>
+                <input id="prodSku" type="text" required placeholder="e.g., SKU-105" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+            </div>
+
+            <p id="productFormError" class="form-error" role="alert" hidden></p>
+            <div class="grid grid-cols-3 gap-2.5">
+              <div>
+                <label for="prodCost" class="block text-xs font-medium text-slate-700 mb-1">Unit cost (PHP)</label>
+                <input id="prodCost" type="number" min="0.01" step="0.01" required value="2197.48" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label for="prodPrice" class="block text-xs font-medium text-slate-700 mb-1">Selling price (PHP)</label>
+                <input id="prodPrice" type="number" min="0.01" step="0.01" required value="4081.03" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label for="prodStock" class="block text-xs font-medium text-slate-700 mb-1">Current Stock</label>
+                <input id="prodStock" type="number" min="0" step="1" required value="80" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+            </div>
+
+            <div class="pt-1 border-t border-slate-100">
+              <span class="text-[11px] font-semibold uppercase tracking-wider text-indigo-600">Demand &amp; Delivery Delay Inputs</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label for="prodAvgSales" class="block text-xs font-medium text-slate-700 mb-1">Avg Daily Sales</label>
+                <input id="prodAvgSales" type="number" min="0" step="0.5" required value="5" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label for="prodMaxSales" class="block text-xs font-medium text-slate-700 mb-1">Max Daily Spike</label>
+                <input id="prodMaxSales" type="number" min="0" step="0.5" required value="8" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label for="prodAvgLead" class="block text-xs font-medium text-slate-700 mb-1">Avg Lead Time (Days)</label>
+                <input id="prodAvgLead" type="number" min="1" step="1" required value="4" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label for="prodMaxLead" class="block text-xs font-medium text-slate-700 mb-1">Max Delay (Days)</label>
+                <input id="prodMaxLead" type="number" min="1" step="1" required value="7" class="w-full rounded-lg border border-slate-300 px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+            </div>
+
+            <!-- Live Formula Preview Box -->
+            <div class="bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500">Computed Safety Stock:</span>
+                <span id="previewSafetyStock" class="font-bold text-slate-800">36 units</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500">Reorder Point (ROP):</span>
+                <span id="previewRop" class="font-bold text-indigo-600">56 units</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-500">Max Optimal Ceiling:</span>
+                <span id="previewCeiling" class="font-bold text-slate-800">91 units</span>
+              </div>
+              <div class="flex items-center justify-between pt-1 border-t border-slate-200">
+                <span class="text-slate-500">Diagnosis:</span>
+                <span id="previewStatusBadge" class="font-semibold text-emerald-700">Optimal Stock Level</span>
+              </div>
+            </div>
+
+            <button id="btnSubmitProduct" type="submit" class="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm transition">
+              Save Product to Inventory
+            </button>
+          </form>
+        </div>
+
+        <!-- Right 2 Columns: Interactive Product Inventory Table -->
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-base font-bold text-slate-900">Live Inventory &amp; Demand Forecast Table</h2>
+              <p class="text-xs text-slate-500">Use quick <span class="font-semibold text-slate-700">-1 Sale</span> or <span class="font-semibold text-slate-700">+10 Restock</span> buttons to see real-time status changes</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <input id="searchInventoryInput" type="search" aria-label="Search products or SKU" placeholder="Search products or SKU…" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <select id="filterStatusSelect" aria-label="Filter products by stock status" class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs bg-white text-slate-700">
+                <option value="ALL">All Statuses</option>
+                <option value="EXCESS">Excess Inventory Only</option>
+                <option value="OPTIMAL">Optimal Range Only</option>
+                <option value="REORDER">Needs Reorder Only</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto custom-scrollbar">
+            <table class="w-full text-left border-collapse min-w-[680px]">
+              <caption class="sr-only">Inventory by product, stock health, and demand forecast</caption>
+              <thead>
+                <tr class="border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50">
+                  <th class="py-2.5 px-3 rounded-tl-lg">Product / SKU</th>
+                  <th class="py-2.5 px-3 text-center">Current Stock</th>
+                  <th class="py-2.5 px-3 text-center">7-Day Demand</th>
+                  <th class="py-2.5 px-3 text-center">Safety Stock</th>
+                  <th class="py-2.5 px-3 text-center">Optimal Range</th>
+                  <th class="py-2.5 px-3">Stock Health &amp; Excess Alert</th>
+                  <th class="py-2.5 px-3 text-right rounded-tr-lg">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryTableBody" class="divide-y divide-slate-100 text-xs">
+                <tr class="skeleton-row" aria-hidden="true"><td colspan="7"><div class="skeleton-lines"><i></i><i></i></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 2: RECORD SALES & ACTIVITY LOG -->
+    <section id="viewSales" role="tabpanel" tabindex="0" aria-labelledby="tabBtnSales" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4 h-fit">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Record Batch Sale or Restock</h2>
+            <p class="text-xs text-slate-500">Automatically updates stock counts, revenue, and excess/reorder status</p>
+          </div>
+
+          <form id="transactionForm" class="space-y-3">
+            <div>
+              <label for="txProductSelect" class="block text-xs font-medium text-slate-700 mb-1">Select Product</label>
+              <select id="txProductSelect" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs bg-white text-slate-800"></select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="txTypeSelect" class="block text-xs font-medium text-slate-700 mb-1">Transaction Type</label>
+                <select id="txTypeSelect" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs bg-white text-slate-800">
+                  <option value="SALE">Customer Sale (- Stock)</option>
+                  <option value="RESTOCK">Supplier Delivery (+ Stock)</option>
+                </select>
+              </div>
+              <div>
+                <label for="txQtyInput" class="block text-xs font-medium text-slate-700 mb-1">Quantity (Units)</label>
+                <input id="txQtyInput" type="number" min="1" step="1" required value="5" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
+              </div>
+            </div>
+
+            <div>
+              <label for="txNoteInput" class="block text-xs font-medium text-slate-700 mb-1">Note / Reference</label>
+              <input id="txNoteInput" type="text" placeholder="e.g., Walk-in customer order #204" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
+            </div>
+
+            <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm transition">
+              Record Transaction
+            </button>
+          </form>
+          <div id="transactionEmptyState" class="empty-state transaction-empty hidden" role="status">
+            <p>Add a product before recording sales or restocks.</p>
+            <button id="btnStartProduct" type="button">Go to inventory</button>
+          </div>
+        </div>
+
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-bold text-slate-900">Sales &amp; Stock Movement Log</h2>
+              <p class="text-xs text-slate-500">Every count change is tracked with timestamp and revenue impact</p>
+            </div>
+            <span id="txCountBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">0 entries</span>
+          </div>
+
+          <div class="overflow-x-auto custom-scrollbar">
+            <table class="w-full text-left border-collapse min-w-[560px]">
+              <caption class="sr-only">Recent sales and stock movements</caption>
+              <thead>
+                <tr class="border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50">
+                  <th class="py-2.5 px-3">Time</th>
+                  <th class="py-2.5 px-3">Product</th>
+                  <th class="py-2.5 px-3">Type</th>
+                  <th class="py-2.5 px-3 text-center">Units</th>
+                  <th class="py-2.5 px-3 text-right">Amount</th>
+                  <th class="py-2.5 px-3">Note</th>
+                </tr>
+              </thead>
+              <tbody id="txTableBody" class="divide-y divide-slate-100 text-xs">
+                <tr class="skeleton-row" aria-hidden="true"><td colspan="6"><div class="skeleton-lines"><i></i><i></i></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: EXCESS INVENTORY & OPTIMIZATION REPORT -->
+    <section id="viewReports" role="tabpanel" tabindex="0" aria-labelledby="tabBtnReports" class="hidden space-y-6">
+      <!-- Visual Comparison Chart -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Current Stock vs. Optimal Ceiling &amp; Safety Stock</h2>
+            <p class="text-xs text-slate-500">Bars rising above the <span class="font-semibold text-indigo-600">Max Optimal Ceiling</span> represent excess inventory tying up warehouse space and taxes</p>
+          </div>
+          <button id="btnCopyReportText" type="button" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition">
+            Copy Executive Summary
+          </button>
+        </div>
+        <div class="relative h-72 w-full chart-wrap">
+          <canvas id="inventoryChart" role="img" aria-label="Bar chart comparing current stock, optimal ceiling, and safety stock by product"></canvas>
+          <p id="chartState" class="chart-state" role="status" hidden></p>
+        </div>
+      </div>
+
+      <!-- Detailed Optimization Report Table -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Automated Inventory &amp; Tax/Carrying Cost Reduction Report</h2>
+          <p class="text-xs text-slate-500">Shows exact units to trim or reorder so the company keeps only the stock it truly needs on hand</p>
+        </div>
+
+        <div class="overflow-x-auto custom-scrollbar">
+          <table class="w-full text-left border-collapse min-w-[700px]">
+            <caption class="sr-only">Excess inventory and recommended actions</caption>
+            <thead>
+              <tr class="border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50">
+                <th class="py-2.5 px-3">Product</th>
+                <th class="py-2.5 px-3 text-center">On Hand</th>
+                <th class="py-2.5 px-3 text-center">Safety Stock</th>
+                <th class="py-2.5 px-3 text-center">Max Optimal</th>
+                <th class="py-2.5 px-3 text-center">Excess Units</th>
+                <th class="py-2.5 px-3 text-right">Excess Capital Tied Up</th>
+                <th class="py-2.5 px-3 text-right">Annual Tax/Space Cost</th>
+                <th class="py-2.5 px-3">Recommended Action</th>
+              </tr>
+            </thead>
+            <tbody id="reportTableBody" class="divide-y divide-slate-100 text-xs">
+              <tr class="skeleton-row" aria-hidden="true"><td colspan="8"><div class="skeleton-lines"><i></i><i></i></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast Notification -->
+  <div id="toastBox" class="fixed bottom-4 right-4 z-50 hidden bg-slate-900 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-lg border border-slate-700" role="status" aria-live="polite">
+    <span id="toastMessage">Saved!</span>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
